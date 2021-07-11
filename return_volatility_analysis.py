@@ -421,6 +421,7 @@ def calculate_and_fill_in(worksheet, r, data_end_revised, start_price, leverage,
 
 def fill_in(worksheet, r, signalType):
     try:
+        print('当前进行至：'+ str(worksheet) + str(r))
         # 获取时间
         local_start_datetime = str(date_and_time(worksheet, r))
         utc_start_datetime, utc_start_unix = utc(local_start_datetime)
@@ -448,7 +449,8 @@ def fill_in(worksheet, r, signalType):
         # 获取72h数据
         data_72h_complete = get_data(coin_type, utc_start_unix, end_unix_72h, '5m')
         # 切片出24h数据
-        data_24h_complete = data_72h_complete[0:289]
+        data_24h_complete = get_data(coin_type, utc_start_unix, end_unix_24h, '5m')
+        # data_24h_complete = data_72h_complete[0:289]
         # 此处以上内容已检测，运行正常
 
         # 获取入场价格和入场时间，并切片数据
@@ -474,9 +476,9 @@ def fill_in(worksheet, r, signalType):
                                                                                        data_end_revised_24h,
                                                                                        start_price_24h, leverage,
                                                                                        get_direction(worksheet, r))
-            worksheet.cell(row=r, column=11).value = average_return_24h
-            worksheet.cell(row=r, column=12).value = max_return_24h
-            worksheet.cell(row=r, column=13).value = volatility_24h
+            worksheet.cell(row=r, column=11).value = average_return_24h*leverage
+            worksheet.cell(row=r, column=12).value = max_return_24h*leverage
+            worksheet.cell(row=r, column=13).value = volatility_24h*leverage
             worksheet.cell(row=r, column=11).number_format = '0.00%'
             worksheet.cell(row=r, column=12).number_format = '0.00%'
             worksheet.cell(row=r, column=13).number_format = '0.00%'
@@ -500,9 +502,9 @@ def fill_in(worksheet, r, signalType):
                                                                                        data_end_revised_72h,
                                                                                        start_price_72h, leverage,
                                                                                        get_direction(worksheet, r))
-            worksheet.cell(row=r, column=14).value = average_return_72h
-            worksheet.cell(row=r, column=15).value = max_return_72h
-            worksheet.cell(row=r, column=16).value = volatility_72h
+            worksheet.cell(row=r, column=14).value = average_return_72h*leverage
+            worksheet.cell(row=r, column=15).value = max_return_72h*leverage
+            worksheet.cell(row=r, column=16).value = volatility_72h*leverage
             worksheet.cell(row=r, column=14).number_format = '0.00%'
             worksheet.cell(row=r, column=15).number_format = '0.00%'
             worksheet.cell(row=r, column=16).number_format = '0.00%'
@@ -514,8 +516,10 @@ def fill_in(worksheet, r, signalType):
 
     except KeyError:
         print(worksheet, '第' + str(r) + "行数据，交易对不合法")
+    except ZeroDivisionError:
+        print(worksheet, '第' + str(r) + "行数据")
 
 
-filename = 'return_volatility_analysis.xlsx'
+filename = r'信号追踪.xlsx'
 data_analysis(filename)
 

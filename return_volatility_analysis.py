@@ -267,7 +267,7 @@ def revise_start_position(worksheet, r, data_complete, lowerbound, upperbound):
     if signal_type(worksheet, r) == 'current':
         data_start_revised = data_complete
         start_time, start_price = get_start_time_and_price(data_start_revised)
-        worksheet.cell(row=r, column=17).value = start_time + '  ' + str(start_price)
+
         play_status = True
 
     elif signal_type(worksheet, r) == 'point':
@@ -275,18 +275,12 @@ def revise_start_position(worksheet, r, data_complete, lowerbound, upperbound):
         if play_status:
             data_start_revised = data_complete[play_index:]
             start_time, start_price = get_start_time_and_price(data_start_revised)
-            worksheet.cell(row=r, column=17).value = start_time + '  ' + str(start_price)
-        else:
-            worksheet.cell(row=r, column=17).value = '未触发建议价格线'
 
     elif signal_type(worksheet, r) == 'interval':
         play_status, play_index = play_time_2side(data_complete, lowerbound, upperbound)
         if play_status:
             data_start_revised = data_complete[play_index:]
             start_time, start_price = get_start_time_and_price(data_start_revised)
-            worksheet.cell(row=r, column=17).value = start_time + '  ' + str(start_price)
-        else:
-            worksheet.cell(row=r, column=17).value = '未触发建议价格区间'
 
     return data_start_revised, start_price, play_status
 
@@ -341,14 +335,10 @@ def revise_end_position(worksheet, r, data_start_revised, start_price, stop_line
 
     if stop_loss_index < liquidation_index:
         end_revised_index = stop_loss_index
-        worksheet.cell(row=r, column=21).value = str(
-            get_datetime(data_start_revised[stop_loss_index][0])) + '  ' + str(
-            data_start_revised[stop_loss_index][1])
+
     elif stop_loss_index > liquidation_index:
         end_revised_index = liquidation_index
-        worksheet.cell(row=r, column=22).value = str(
-            get_datetime(data_start_revised[liquidation_index][0])) + '  ' + str(
-            data_start_revised[liquidation_index][1])
+
     elif stop_loss_index == liquidation_index:
         end_revised_index = stop_loss_index
 
@@ -397,13 +387,12 @@ def calculate_and_fill_in(worksheet, r, data_end_revised, start_price, leverage,
     else:
         for i in range(len(data_end_revised)):
             return_every_5min = (start_price - float(data_end_revised[i][1])) / start_price
-            max_ret_every_5min = (start_price - float(data_end_revised[i][2])) / start_price
+            max_ret_every_5min = (start_price - float(data_end_revised[i][3])) / start_price
             return_list.append(return_every_5min)
             max_ret_list.append(max_ret_every_5min)
             return_sum = return_sum + return_every_5min
 
     average_return = return_sum / (len(data_end_revised))
-
 
     max_return = max(max_ret_list)
 
@@ -421,13 +410,14 @@ def calculate_and_fill_in(worksheet, r, data_end_revised, start_price, leverage,
 
 def fill_in(worksheet, r, signalType):
     try:
-        print('当前进行至：'+ str(worksheet) + str(r))
+        print('当前进行至：' + str(worksheet) + str(r))
         # 获取时间
         local_start_datetime = str(date_and_time(worksheet, r))
         utc_start_datetime, utc_start_unix = utc(local_start_datetime)
 
         end_unix_24h = utc_start_unix + 86400000  # unix时间 +1d (毫秒)
         end_unix_72h = utc_start_unix + 86400000 * 3
+        end_unix_7day = utc_start_unix + 86400000 * 7
 
         # 获取币种
         coin_type = worksheet.cell(row=r, column=3).value
@@ -445,7 +435,8 @@ def fill_in(worksheet, r, signalType):
         leverage = worksheet.cell(row=r, column=10).value
         if leverage is None:
             leverage = 1
-
+        # 获取7天数据
+        data_7day_complete = get_data(coin_type, utc_start_unix, end_unix_7day, '15m')
         # 获取72h数据
         data_72h_complete = get_data(coin_type, utc_start_unix, end_unix_72h, '5m')
         # 切片出24h数据
@@ -460,25 +451,29 @@ def fill_in(worksheet, r, signalType):
         data_start_revised_72h, start_price_72h, play_status_72h = revise_start_position(worksheet, r,
                                                                                          data_72h_complete, lowerbound,
                                                                                          upperbound)
+        data_start_revised_7day, start_price_7day, play_status_7day = revise_start_position(worksheet, r,
+                                                                                            data_7day_complete,
+                                                                                            lowerbound,
+                                                                                            upperbound)
 
         # 如果24h入场，进行填写
         if play_status_24h:
             # 填写入场时间和价格
-            worksheet.cell(row=r, column=17).value = str(get_datetime(data_start_revised_24h[0][0])) + '  ' + str(
+            worksheet.cell(row=r, column=20).value = str(get_datetime(data_start_revised_24h[0][0])) + '  ' + str(
                 start_price_24h)
             # 检测止损和爆仓并填写止损或爆仓状态，获得切片数据，填写出场时间和价格
             data_end_revised_24h = revise_end_position(worksheet, r, data_start_revised_24h, start_price_24h, stop_line,
                                                        stop_percent, leverage)
-            worksheet.cell(row=r, column=18).value = str(get_datetime(data_end_revised_24h[-1][0])) + '  ' + str(
+            worksheet.cell(row=r, column=21).value = str(get_datetime(data_end_revised_24h[-1][0])) + '  ' + str(
                 data_end_revised_24h[-1][1])
             # 计算return和volatility并填写
             average_return_24h, max_return_24h, volatility_24h = calculate_and_fill_in(worksheet, r,
                                                                                        data_end_revised_24h,
                                                                                        start_price_24h, leverage,
                                                                                        get_direction(worksheet, r))
-            worksheet.cell(row=r, column=11).value = average_return_24h*leverage
-            worksheet.cell(row=r, column=12).value = max_return_24h*leverage
-            worksheet.cell(row=r, column=13).value = volatility_24h*leverage
+            worksheet.cell(row=r, column=11).value = average_return_24h * leverage
+            worksheet.cell(row=r, column=12).value = max_return_24h * leverage
+            worksheet.cell(row=r, column=13).value = volatility_24h * leverage
             worksheet.cell(row=r, column=11).number_format = '0.00%'
             worksheet.cell(row=r, column=12).number_format = '0.00%'
             worksheet.cell(row=r, column=13).number_format = '0.00%'
@@ -490,21 +485,21 @@ def fill_in(worksheet, r, signalType):
         # 如果72h入场，进行填写
         if play_status_72h:
             # 填写入场时间和价格
-            worksheet.cell(row=r, column=19).value = str(get_datetime(data_start_revised_72h[0][0])) + '  ' + str(
+            worksheet.cell(row=r, column=22).value = str(get_datetime(data_start_revised_72h[0][0])) + '  ' + str(
                 start_price_72h)
             # 检测止损和爆仓并填写止损或爆仓状态，获得切片数据，填写出场时间和价格
             data_end_revised_72h = revise_end_position(worksheet, r, data_start_revised_72h, start_price_72h, stop_line,
                                                        stop_percent, leverage)
-            worksheet.cell(row=r, column=20).value = str(get_datetime(data_end_revised_72h[-1][0])) + '  ' + str(
+            worksheet.cell(row=r, column=23).value = str(get_datetime(data_end_revised_72h[-1][0])) + '  ' + str(
                 data_end_revised_72h[-1][1])
             # 计算return和volatility并填写
             average_return_72h, max_return_72h, volatility_72h = calculate_and_fill_in(worksheet, r,
                                                                                        data_end_revised_72h,
                                                                                        start_price_72h, leverage,
                                                                                        get_direction(worksheet, r))
-            worksheet.cell(row=r, column=14).value = average_return_72h*leverage
-            worksheet.cell(row=r, column=15).value = max_return_72h*leverage
-            worksheet.cell(row=r, column=16).value = volatility_72h*leverage
+            worksheet.cell(row=r, column=14).value = average_return_72h * leverage
+            worksheet.cell(row=r, column=15).value = max_return_72h * leverage
+            worksheet.cell(row=r, column=16).value = volatility_72h * leverage
             worksheet.cell(row=r, column=14).number_format = '0.00%'
             worksheet.cell(row=r, column=15).number_format = '0.00%'
             worksheet.cell(row=r, column=16).number_format = '0.00%'
@@ -513,13 +508,50 @@ def fill_in(worksheet, r, signalType):
             worksheet.cell(row=r, column=15).fill = fill
             worksheet.cell(row=r, column=16).fill = fill
 
+        # 如果7day入场，进行填写
+        if play_status_7day:
+            # 填写入场时间和价格
+            worksheet.cell(row=r, column=24).value = str(get_datetime(data_start_revised_7day[0][0])) + '  ' + str(
+                start_price_7day)
+            # 检测止损和爆仓并填写止损或爆仓状态，获得切片数据，填写出场时间和价格
+            data_end_revised_7day = revise_end_position(worksheet, r, data_start_revised_7day, start_price_7day,
+                                                        stop_line,
+                                                        stop_percent, leverage)
+            worksheet.cell(row=r, column=25).value = str(get_datetime(data_end_revised_7day[-1][0])) + '  ' + str(
+                data_end_revised_7day[-1][1])
+            # 计算return和volatility并填写
+            average_return_7day, max_return_7day, volatility_7day = calculate_and_fill_in(worksheet, r,
+                                                                                          data_end_revised_7day,
+                                                                                          start_price_7day, leverage,
+                                                                                          get_direction(worksheet, r))
+            worksheet.cell(row=r, column=17).value = average_return_7day * leverage
+            worksheet.cell(row=r, column=18).value = max_return_7day * leverage
+            worksheet.cell(row=r, column=19).value = volatility_7day * leverage
+            worksheet.cell(row=r, column=17).number_format = '0.00%'
+            worksheet.cell(row=r, column=18).number_format = '0.00%'
+            worksheet.cell(row=r, column=19).number_format = '0.00%'
+            fill = PatternFill("solid", fgColor="C1FFC1")
+            worksheet.cell(row=r, column=17).fill = fill
+            worksheet.cell(row=r, column=18).fill = fill
+            worksheet.cell(row=r, column=19).fill = fill
+
+            # 使数据逻辑上不出差（可能出现这个问题的原因是入场价不同）
+            if worksheet.cell(row=r, column=15).value is not None and worksheet.cell(row=r,
+                                                                                     column=18).value < worksheet.cell(
+                    row=r, column=15).value:
+                worksheet.cell(row=r, column=18).value = worksheet.cell(row=r, column=15).value
+
 
     except KeyError:
         print(worksheet, '第' + str(r) + "行数据，交易对不合法")
     except ZeroDivisionError:
-        print(worksheet, '第' + str(r) + "行数据")
+        print(worksheet, '第' + str(r) + "行数据, ZeroDivisionError")
 
 
-filename = r'信号追踪.xlsx'
-data_analysis(filename)
+filename = ['信号追踪1.xlsx','信号追踪2.xlsx','信号追踪3.xlsx','信号追踪4.xlsx','信号追踪5.xlsx','信号追踪6.xlsx','信号追踪7.xlsx','信号追踪8.xlsx','信号追踪9.xlsx','信号追踪10.xlsx','信号追踪11.xlsx']
+
+for name in filename:
+    data_analysis(name)
+
+
 
